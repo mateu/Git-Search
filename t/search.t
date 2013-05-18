@@ -7,7 +7,16 @@ use DDP;
 
 my $config = Git::Search::Config->new->config;
 my $search = {
-    query => { match => {content => $ARGV[0]}},
+#    query => { match => {content => $ARGV[0]}},
+    query => { 
+        match_phrase_prefix => {
+            content => {
+                query => $ARGV[0],
+                slop => 1024,
+                max_expansions => 100,
+            },
+        }
+    },
 };
 my $search_json = encode_json($search);
 my $base_url = base_url();

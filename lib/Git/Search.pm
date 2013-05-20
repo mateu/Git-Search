@@ -8,6 +8,7 @@ use HTTP::Request;
 use LWP::UserAgent;
 use IPC::System::Simple qw/ capture /;
 use Git::Search::Config;
+use DDP;
 
 has config => (
     is => 'lazy',
@@ -84,21 +85,34 @@ sub _build_docs {
 sub insert_docs {
     my ($self, ) = @_;
 
-    # Remove existing data?
-     my $request = HTTP::Request->new(DELETE => $self->base_url);
-     my $ua = LWP::UserAgent->new;
-     my $response = $ua->request($request);
-     if (not $response->is_success) {
-         warn "DELETE of ", $self->base_url, " failed with response status: ", 
-           $response->status_line;
-         return;
-     }
-    # Insert (and index) the docs
-    foreach my $doc (@{$self->docs}) {
-        $self->create_doc($doc);
+    my $docs_inserted_count = 0;
+    my $ua = LWP::UserAgent->new;
+    # Check if index exists
+    my $mapping_url =  $self->base_url . '_mapping';
+    my $get_request = HTTP::Request->new(GET => $mapping_url);
+    my $get_response = $ua->request($get_request);
+    # If we already have an index we'll need to delete it so we don't 
+    # have redundant records with this bulk load.
+    # TODO: Use file name is unique id for the docs on insertion
+    if ($get_response->is_success) {
+        my $delete_request = HTTP::Request->new(DELETE => $self->base_url);
+        my $delete_response = $ua->request($delete_request);
+        # Remove existing data?
+        if (not $delete_response->is_success) {
+            warn "DELETE of ", $self->base_url, " failed with response status: ", 
+              $get_response->status_line;
+            return;
+        }
     }
 
-    return;
+    # Insert (and index) the docs
+    foreach my $doc (@{$self->docs}) {
+        if (my $success = $self->create_doc($doc)) {
+            $docs_inserted_count++;
+        }
+    }
+
+    return $docs_inserted_count;
 }
 
 sub create_doc {
@@ -109,7 +123,6 @@ sub create_doc {
     $request->content($json_doc);
     my $ua = LWP::UserAgent->new;
     my $response = $ua->request($request);
-    # Check for failed insert/request
     if (not $response->is_success) {
         warn "Request failed with response status: ", $response->status_line;
         return;

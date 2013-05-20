@@ -13,7 +13,6 @@ my $search = {
             content => {
                 query => $ARGV[0],
                 slop => 36,
-#                max_expansions => 10,
                 operator => 'and',
             },
         }
@@ -30,6 +29,7 @@ my $search = {
     },
     #fields => ['content', 'name'],
 };
+
 my $search_json = encode_json($search);
 my $base_url = base_url();
 my $url = $base_url . '_search';
@@ -40,7 +40,10 @@ my $ua = LWP::UserAgent->new;
 my $res = $ua->request($req);
 warn "RESPONSE: ";
 my $output = decode_json($res->content);
-p($output->{hits}->{hits}->[0]->{highlight});
-p($output->{hits}->{hits}->[0]->{_source}->{name});
+my $hits = $output->{hits}->{hits};
+foreach my $hit (@{$hits}) {
+    p($hit->{highlight});
+    p($hit->{_source}->{name});
+}
 
 sub base_url { return $config->{base_url} }

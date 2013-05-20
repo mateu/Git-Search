@@ -9,14 +9,26 @@ my $config = Git::Search::Config->new->config;
 my $search = {
 #    query => { match => {content => $ARGV[0]}},
     query => { 
-        match_phrase_prefix => {
+        match_phrase => {
             content => {
                 query => $ARGV[0],
-                slop => 1024,
-                max_expansions => 100,
+                slop => 36,
+#                max_expansions => 10,
+                operator => 'and',
             },
         }
     },
+    highlight => {
+        fields => {
+            content => {
+#                pre_tags            => ['"'],
+#                post_tags           => ['"'],
+                number_of_fragments => 1,
+                fragment_size       => 300,
+            }
+        },
+    },
+    #fields => ['content', 'name'],
 };
 my $search_json = encode_json($search);
 my $base_url = base_url();
@@ -28,6 +40,7 @@ my $ua = LWP::UserAgent->new;
 my $res = $ua->request($req);
 warn "RESPONSE: ";
 my $output = decode_json($res->content);
-p($output->{hits}->{hits}->[0]);
+p($output->{hits}->{hits}->[0]->{highlight});
+p($output->{hits}->{hits}->[0]->{_source}->{name});
 
 sub base_url { return $config->{base_url} }

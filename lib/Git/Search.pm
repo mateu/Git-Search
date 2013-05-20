@@ -8,7 +8,6 @@ use HTTP::Request;
 use LWP::UserAgent;
 use IPC::System::Simple qw/ capture /;
 use Git::Search::Config;
-use DDP;
 
 has config => (
     is => 'lazy',
@@ -96,7 +95,6 @@ sub insert_docs {
      }
     # Insert (and index) the docs
     foreach my $doc (@{$self->docs}) {
-        #warn "creating ", $doc->{name}, "\n";
         $self->create_doc($doc);
     }
 
@@ -159,8 +157,6 @@ sub _build_results {
     my $response = $ua->request($request);
 
     return decode_json($response->content);
-#    p($output->{hits}->{hits}->[0]->{highlight});
-#    p($output->{hits}->{hits}->[0]->{_source}->{name});
 }
 
 

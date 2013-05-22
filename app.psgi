@@ -44,12 +44,13 @@ sub html_wrapper {
     my ($self, $content) = @_;
 
     $content //= 'No Hits';
+    my $highlight_css = $self->highlight_css;
  
     my $head =<<"EOH";
 <html>
 <head>
 <style media="screen" type="text/css">
-em.hlt1 { color: green; font-weight: bold; font-style: normal;}
+$highlight_css
 </style>
 </head>
 EOH
@@ -63,6 +64,23 @@ EOB
 
     my $page = $head . $body;
     return $page;
+}
+
+sub highlight_css {
+    my ($self, ) = @_;
+
+    my @highlight_css;
+    my @font = ('font-weight:bold', 'font-style:normal'); 
+    my $highlight_colors = 'green,' x 3 . 'orange,' x 3 . 'purple,' x 3 . 'red';
+    my @highlight_colors = split /,/, $highlight_colors;
+    foreach my $n (1..10) {
+        my $class = 'em.hlt' . $n;
+        my $color = 'color:' . $highlight_colors[$n - 1];
+        my $attributes = join '; ', $color, @font;
+        my $css_line = $class . ' { ' . $attributes . '; }';
+        push @highlight_css, $css_line;
+    } 
+    return join "\n", @highlight_css;
 }
  
 GitSearch->run_if_script;

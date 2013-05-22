@@ -24,13 +24,7 @@ sub dispatch_request {
     my $output;
     my $hits = $self->gs->hits;
     foreach my $hit (@{$hits}) {
-      my $name = $hit->{_source}->{name};
-      my $highlights = $hit->{highlight};
-      my @content = @{$highlights->{content}};
-      my $content = join '<br><hr><br>', @content;
-      $output .= "<h2><a href='/${name}'>${name}</a></h2>\n";
-      $output .= "<pre>${content}</pre>\n";
-      #warn Dumper(@content);
+        $output .= $self->add_hit_content($hit);
     }
     my $page = $self->html_wrapper($output);
     [ 200, [ 'Content-type', 'text/html' ], [ $page ] ]
@@ -38,6 +32,18 @@ sub dispatch_request {
   sub () {
     [ 405, [ 'Content-type', 'text/plain' ], [ 'Method not allowed' ] ]
   }
+}
+
+sub add_hit_content {
+    my ($self, $hit) = @_;
+
+    my $name = $hit->{_source}->{name};
+    my $highlights = $hit->{highlight};
+    my @content = @{$highlights->{content}};
+    my $content = join '<br><hr><br>', @content;
+    my $output .= "<h2><a href='/${name}'>${name}</a></h2>\n";
+    $output .= "<pre>${content}</pre>\n";
+    return $output;
 }
 
 sub html_wrapper {

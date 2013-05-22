@@ -11,6 +11,8 @@ use IPC::System::Simple qw/ capture /;
 use Git::Search::Config;
 use DDP;
 
+our $VERSION = 1;
+
 has config => (
     is      => 'lazy',
     builder => sub { Git::Search::Config->new->config },

@@ -3,4 +3,17 @@
 .build
 git-search-local.conf
 Git-Search-*
+MANIFEST
+MANIFEST.bak
+META.*
+MYMETA.*
+Makefile
+Makefile.old
+README
+blib/
+pm_to_blib
+Distar/
+.tidyall.d/
 
+# yes that's right, distar makes it for us
+MANIFEST.SKIP

@@ -262,3 +262,18 @@ sub _build_mapping {
 }
 
 1
+
+__END__
+
+=head1 NAME
+
+Git::Search - search a git repo with elasticsearch
+
+=head1 SYNOPSIS
+
+    # Copy git-search.conf to git-search-local.conf and edit it to your needs
+    perl -Ilib xt/index.t  # create index
+    plackup -Ilib web.psgi # start app
+    # Do a search by requesting:  http://localhost:5000/search phrase
+    
+=cut

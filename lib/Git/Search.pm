@@ -56,7 +56,6 @@ has furl => (is => 'lazy', builder => sub { Furl::HTTP->new });
 has file_list => (is => 'lazy',);
 has docs      => (is => 'lazy',);
 has query     => (is => 'lazy', clearer => 1);
-has query_json     => (is => 'lazy', builder => sub { encode_json(shift->query) } );
 has results   => (is => 'lazy', clearer => 1);
 has hits => (
     is      => 'lazy',
@@ -72,7 +71,6 @@ after search_phrase => sub {
     $self->clear_hits;
 };
 has mappings => (is => 'lazy');
-has mappings_json => (is => 'lazy', builder => sub { encode_json(shift->mappings) });
 has settings => (is => 'lazy');
 
 sub _build_file_list {

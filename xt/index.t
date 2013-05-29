@@ -6,4 +6,3 @@ my $gs = Git::Search->new;
 ok($gs->insert_docs, "Inserted some docs");
 
 done_testing();
-

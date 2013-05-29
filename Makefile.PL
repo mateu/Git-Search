@@ -15,7 +15,7 @@ my %RUN_DEPS = (
   'Furl' => 2.16,
 );
 my %BUILD_DEPS = (
-  'Test::More'  =>  0.000006,
+  'Test::More'  =>  0.96,
 );
 
 WriteMakefile(

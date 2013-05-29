@@ -10,13 +10,12 @@ my %RUN_DEPS = (
   'Path::Class' => 0.32,
   'IO::All' => 0.46,
   'JSON' => 2.57,
-  'HTTP::Request' => 6.00,
-  'LWP::UserAgent' => 6.05,
   'IPC::System::Simple' => 1.21,
   'Web::Simple' => 0.020,
+  'Furl' => 2.16,
 );
 my %BUILD_DEPS = (
-  'Test::Simpler'  =>  0.000006,
+  'Test::More'  =>  0.000006,
 );
 
 WriteMakefile(

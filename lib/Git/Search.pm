@@ -2,16 +2,15 @@ use strict;
 use warnings;
 
 package Git::Search;
+use Git::Search::Config;
 use Moo;
 use IO::All;
 use JSON;
-use HTTP::Request;
-use LWP::UserAgent;
 use IPC::System::Simple qw/ capture /;
-use Git::Search::Config;
+use Furl;
 use DDP;
 
-our $VERSION = 1;
+our $VERSION = 1.00;
 
 has config => (
     is      => 'lazy',
@@ -21,15 +20,33 @@ has work_tree => (
     is      => 'lazy',
     builder => sub { shift->config->{work_tree} },
 );
-has base_url => (
-    is      => 'lazy',
-    builder => sub { shift->config->{base_url} },
-);
 has index_url => (
     is      => 'lazy',
-    builder => sub { shift->config->{index_url} },
+    builder => sub { 
+        my $self = shift;
+        my $config = $self->config;
+        my $return = 'http://' . $config->{host} . ':' . $config->{port}
+               . '/' . $config->{index} . '/';
+               warn "index url: $return";
+               return $return;
+    },
 );
-has ua => (is => 'lazy', builder => sub { LWP::UserAgent->new });
+has base_url => (
+    is      => 'lazy',
+    builder => sub { 
+        my $self = shift;
+        my $config = $self->config;
+        my $base_url= $self->index_url . $config->{type} . '/';
+    },
+);
+has path_query_base => (
+    is      => 'lazy',
+    builder => sub { 
+        my $self = shift;
+        return '/' . $self->config->{index} . '/' . $self->config->{type} . '/';
+    },
+);
+has furl => (is => 'lazy', builder => sub { Furl::HTTP->new });
 has file_list => (is => 'lazy',);
 has docs      => (is => 'lazy',);
 has query     => (is => 'lazy', clearer => 1);
@@ -40,7 +57,7 @@ has hits => (
     builder => sub { shift->results->{hits}->{hits} },
     clearer => 1,
 );
-has size          => (is => 'lazy', builder => sub { 100 },);
+has size          => (is => 'lazy', builder => sub { 25 },);
 has search_phrase => (is => 'rw',   builder => sub { $ARGV[0] });
 after search_phrase => sub {
     my $self = shift;
@@ -106,7 +123,7 @@ sub insert_docs {
 
     # Insert (and index) the docs
     foreach my $doc (@{ $self->docs }) {
-        warn "creating doc: ", $doc->{name}, "\n";
+        #warn "creating doc: ", $doc->{name}, "\n";
         if (my $success = $self->create_doc($doc)) {
             $docs_inserted_count++;
         }
@@ -119,27 +136,26 @@ sub delete_index {
     my ($self, ) = @_;
 
     # Check if index exists
-    my $mapping_url = $self->base_url . '_mapping';
-    my $get_request = HTTP::Request->new(GET => $mapping_url);
-    warn "Getting $mapping_url";
+    my $index_status_url = $self->index_url . '_status';
+    warn "Getting $index_status_url";
+    my @status_response = $self->furl->get($index_status_url);
 
     # If we already have an index we'll need to delete it so we don't
     # have redundant records with this bulk load.
     # TODO: Use file name is unique id for the docs on insertion
-    my $get_response = $self->ua->request($get_request);
-    if ($get_response->is_success) {
-        warn "Have a index already, going to delete it";
-        my $delete_request = HTTP::Request->new(DELETE => $self->base_url);
-        my $delete_response = $self->ua->request($delete_request);
+    if ($status_response[2] eq 'OK') {
+        warn "Have an index already, going to delete it";
+        my @delete_response = $self->furl->delete($self->index_url);
 
         # Remove existing data?
-        if (not $delete_response->is_success) {
-            warn "DELETE of ", $self->base_url,
+        if ($delete_response[2] ne 'OK') {
+            warn "DELETE of ", $self->index_url,
               " failed with response status: ",
-              $get_response->status_line;
+              $delete_response[1], ':', $delete_response[2];
             return;
         }
         else {
+            warn "DELETE went $delete_response[2]";
             return 1;
         }
     }
@@ -149,17 +165,23 @@ sub delete_index {
 
 sub create_doc {
     my ($self, $doc) = @_;
-    my $request = HTTP::Request->new(POST => $self->base_url);
-    $request->content_type('application/json');
-    my $json_doc = encode_json($doc);
-    $request->content($json_doc);
-    my $ua       = LWP::UserAgent->new;
-    my $response = $ua->request($request);
-    if (not $response->is_success) {
-        warn "Request failed with response status: ", $response->status_line;
+
+    # Note: automatic ID generation requires a POST
+    #       (with op_type auto set to 'create')
+    my %args = (
+        request_method => 'POST',
+        content_type   => 'application/json',
+        content        =>  encode_json($doc),
+        path_query     => $self->path_query_base,
+    );
+    my $response = $self->crud(%args);
+
+    if ($response->{msg} ne 'Created') {
+        warn "Request failed with message: ", $response->{msg};
         p($response);
         return;
     }
+
     return 1;
 }
 
@@ -184,7 +206,7 @@ sub _build_query {
             order => 'score',
             fields      => {
                 content => {
-                    number_of_fragments => 12,
+                    number_of_fragments => 36,
                     fragment_size       => 128,
                 }
             },
@@ -198,26 +220,51 @@ sub _build_query {
 sub _build_results {
     my ($self,) = @_;
 
-    my $request = HTTP::Request->new(POST => $self->base_url . '_search');
-    $request->content_type('application/json');
-    $request->content(encode_json($self->query));
-    my $ua       = LWP::UserAgent->new;
-    my $response = $ua->request($request);
-
-    return decode_json($response->content);
+    my %args = (
+        request_method => 'POST',
+        content_type   => 'application/json',
+        content        => $self->query_json,
+        path_query     => $self->path_query_base . '_search',
+    );
+    my $response = $self->crud(%args);
+    return decode_json($response->{body});
 }
 
 sub crud {
     my ($self, %arg) = @_;
 
-    my ($request_method, $url, $content_type, $content) =
-      @arg{qw/request_method url content_type content/};
+    my ($request_method, $path_query, $content_type, $content) =
+      @arg{qw/request_method path_query content_type content/};
+    my %request = (
+        method     => $request_method,
+        host       => $self->config->{host},
+        port       => $self->config->{port},
+        path_query => $path_query,
+    );
+    $request{content_type} = $content_type if $content_type;
+    $request{content} = $content if $content;
+    my %response;
+    @response{qw(minor_version code msg headers body)} = $self->furl->request( %request);
+    return \%response;
+}
 
-    my $request = HTTP::Request->new($request_method => $url);
-    $request->content_type($content_type);
-    $request->content($content);
-    my $response = $self->ua->request($request);
-    return $response;
+sub check_response {
+    my ($self, $request_method, $code, $msg ) = @_;
+    my $check_response = {
+        'HEAD' => sub { },
+        'GET' => sub { 
+            if ($code !~ m/200/) { die "Error, expected reponse code of 200 but got $code:$msg"; }
+            if ($msg ne 'OK') { die "Error, expected message of OK but got $msg"; }
+        },
+        'PUT' => sub { },
+        'POST' => sub { 
+            if ($code !~ m/20\d/) { die "Error, expected reponse code of 20? but got $code:$msg;" }
+            if ($msg !~ m/Created|OK/) { die "Error, expected message of Created but got $msg"; }
+            
+        },
+        'DELETE' => sub { },
+    };
+    $check_response->{$request_method}->();
 }
 
 sub set_mapping {

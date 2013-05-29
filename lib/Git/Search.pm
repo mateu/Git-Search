@@ -8,7 +8,7 @@ use IO::All;
 use JSON;
 use IPC::System::Simple qw/ capture /;
 use Furl;
-use DDP;
+use Data::Dumper;
 
 our $VERSION = 1.00;
 
@@ -25,10 +25,9 @@ has index_url => (
     builder => sub { 
         my $self = shift;
         my $config = $self->config;
-        my $return = 'http://' . $config->{host} . ':' . $config->{port}
+        my $index_url = 'http://' . $config->{host} . ':' . $config->{port}
                . '/' . $config->{index} . '/';
-               warn "index url: $return";
-               return $return;
+        return $index_url;
     },
 );
 has base_url => (
@@ -39,11 +38,18 @@ has base_url => (
         my $base_url= $self->index_url . $config->{type} . '/';
     },
 );
+has path_query_index => (
+    is      => 'lazy',
+    builder => sub { 
+        my $self = shift;
+        return '/' . $self->config->{index} . '/';
+    },
+);
 has path_query_base => (
     is      => 'lazy',
     builder => sub { 
         my $self = shift;
-        return '/' . $self->config->{index} . '/' . $self->config->{type} . '/';
+        return $self->path_query_index . $self->config->{type} . '/';
     },
 );
 has furl => (is => 'lazy', builder => sub { Furl::HTTP->new });
@@ -65,8 +71,9 @@ after search_phrase => sub {
     $self->clear_results;
     $self->clear_hits;
 };
-has mapping => (is => 'lazy');
-has mapping_json => (is => 'lazy', builder => sub { encode_json(shift->mapping) });
+has mappings => (is => 'lazy');
+has mappings_json => (is => 'lazy', builder => sub { encode_json(shift->mappings) });
+has settings => (is => 'lazy');
 
 sub _build_file_list {
     my ($self,) = @_;
@@ -118,12 +125,11 @@ sub insert_docs {
 
     warn "insert docs...";
     my $docs_inserted_count = 0;
-    $self->delete_index;
-#    $self->set_mapping;
+    $self->recreate_index;
 
     # Insert (and index) the docs
     foreach my $doc (@{ $self->docs }) {
-        #warn "creating doc: ", $doc->{name}, "\n";
+        if ($ENV{GIT_SEARCH_DEBUG}) { warn "creating doc: ", $doc->{name}, "\n"; }
         if (my $success = $self->create_doc($doc)) {
             $docs_inserted_count++;
         }
@@ -132,19 +138,45 @@ sub insert_docs {
     return $docs_inserted_count;
 }
 
+sub recreate_index {
+    my ($self, ) = @_;
+    $self->delete_index;
+    $self->create_index;
+}
+
+sub create_index {
+    my ($self, ) = @_;
+
+    my $index = {
+        settings => $self->settings,
+        mappings => $self->mappings,
+    };
+    my %args = (
+        request_method => 'POST',
+        content_type   => 'application/json',
+        content        =>  encode_json($index),
+        path_query     => $self->path_query_index,
+    );
+    my $response = $self->crud(%args);
+    if ($response->{code} != 200) {
+        die "Index creation failed ", $response->{msg};
+    }
+    return 1;
+}
+
 sub delete_index {
     my ($self, ) = @_;
 
     # Check if index exists
     my $index_status_url = $self->index_url . '_status';
-    warn "Getting $index_status_url";
+    warn "Getting $index_status_url\n";
     my @status_response = $self->furl->get($index_status_url);
 
     # If we already have an index we'll need to delete it so we don't
     # have redundant records with this bulk load.
     # TODO: Use file name is unique id for the docs on insertion
     if ($status_response[2] eq 'OK') {
-        warn "Have an index already, going to delete it";
+        warn "Have an index already, going to delete it\n";
         my @delete_response = $self->furl->delete($self->index_url);
 
         # Remove existing data?
@@ -155,7 +187,7 @@ sub delete_index {
             return;
         }
         else {
-            warn "DELETE went $delete_response[2]";
+            warn "DELETE went $delete_response[2]\n";
             return 1;
         }
     }
@@ -178,7 +210,7 @@ sub create_doc {
 
     if ($response->{msg} ne 'Created') {
         warn "Request failed with message: ", $response->{msg};
-        p($response);
+        warn Dumper $response;
         return;
     }
 
@@ -197,7 +229,6 @@ sub _build_query {
                     max_expansions => 25,
                     fuzziness      => 0.75,
                     prefix_length  => 1,
-#                    analyzer => 'verbatim',
                 },
             }
         },
@@ -223,7 +254,7 @@ sub _build_results {
     my %args = (
         request_method => 'POST',
         content_type   => 'application/json',
-        content        => $self->query_json,
+        content        => encode_json($self->query),
         path_query     => $self->path_query_base . '_search',
     );
     my $response = $self->crud(%args);
@@ -267,44 +298,36 @@ sub check_response {
     $check_response->{$request_method}->();
 }
 
-sub set_mapping {
+sub _build_mappings {
     my ($self,) = @_;
 
-    my %args = (
-        request_method => 'PUT',
-        url            => $self->index_url,
-        content_type   => 'application/json',
-        content        => $self->mapping_json,
-    );
-    my $response = $self->crud(%args);
-    return $response;
+    return {
+        "git" => {
+            "_source" => { "compress" => 1 },
+            "numeric_detection" => 1,
+            "dynamic" => "strict",
+            "type" => "object",
+            "properties" => {
+                "commit_id" => { "type" => "string" },
+                "content"   => {
+                    "index" => "analyzed",
+                    "store" => "yes",
+                    "type" => "string",
+                     "term_vector" => "with_positions_offsets",
+                },
+                "mode" => { "type" => "string" },
+                "name" => { "type" => "string" },
+                "type" => { "type" => "string" }
+            }
+        }
+    };
 }
 
-sub _build_mapping {
+sub _build_settings {
     my ($self,) = @_;
-
-    my $map = {
-        "mappings" => {
-            "git" => {
-                "_source" => { "compress" => 1 },
-                "numeric_detection" => 1,
-                "dynamic" => "strict",
-                "type" => "object",
-                "properties" => {
-                    "commit_id" => { "type" => "string" },
-                    "content"   => {
-                        "index" => "analyzed",
-                        "store" => "yes",
-                        "type" => "string",
-                         "term_vector" => "with_positions_offsets",
-                         "analyzer" => "verbatim"
-                    },
-                    "mode" => { "type" => "string" },
-                    "name" => { "type" => "string" },
-                    "type" => { "type" => "string" }
-                }
-              }
-        }
+    return {
+        number_of_shards => 2,
+        number_of_replicas => 1,
     };
 }
 

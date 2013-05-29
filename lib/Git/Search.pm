@@ -10,7 +10,7 @@ use IPC::System::Simple qw/ capture /;
 use Furl;
 use Data::Dumper;
 
-our $VERSION = 1.00;
+our $VERSION = 0.01;
 
 has config => (
     is      => 'lazy',

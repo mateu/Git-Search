@@ -72,6 +72,7 @@ after search_phrase => sub {
 };
 has mappings => (is => 'lazy');
 has settings => (is => 'lazy');
+has analyzers => (is => 'lazy');
 
 sub _build_file_list {
     my ($self,) = @_;
@@ -89,8 +90,21 @@ sub _build_file_list {
     @sub_dirs = map { '^' . $_ } @sub_dirs;
     my $sub_dirs = join '|', @sub_dirs;
     @files = grep { $_->[$name] =~ m!($sub_dirs)! } @files;
+    # Filter out non-text files
+    my @text_files = grep {
+        $self->is_text_file($self->work_tree . $_->[$name]) 
+    } @files;
 
-    return \@files;
+    return \@text_files;
+}
+
+sub is_text_file {
+    my ($self, $file) = @_;
+    my $size = -s $file;
+    my $size_threshold = 100_00;
+    warn "file size: $size for $file\n" if $size > 1_000_000;
+    return if ($size > $size_threshold); 
+    -f $file && -T $file;
 }
 
 sub _build_docs {
@@ -121,7 +135,6 @@ sub _build_docs {
 sub insert_docs {
     my ($self,) = @_;
 
-    warn "insert docs...";
     my $docs_inserted_count = 0;
     $self->recreate_index;
 
@@ -215,21 +228,66 @@ sub create_doc {
     return 1;
 }
 
+sub match_query {
+    my ($self, ) = @_;
+
+    return {
+        match => {
+            content => {
+                query          => $self->search_phrase,
+                operator       => 'and',
+                fuzziness      => 0.75,
+                prefix_length  => 1,
+                max_expansions => 25,
+                analyzer => 'verbatim',
+            },
+        }
+    };
+}
+
+sub match_phrase_query {
+    my ($self, ) = @_;
+
+    return {
+        match => {
+            content => {
+                query          => $self->search_phrase,
+                type           => 'phrase',
+                operator       => 'and',
+                fuzziness      => 0.75,
+                prefix_length  => 1,
+                max_expansions => 25,
+                slop           => 12,
+                analyzer => 'verbatim',
+            },
+        }
+    };
+}
+
+sub match_phrase_prefix_query {
+    my ($self, ) = @_;
+
+    return {
+        match => {
+            content => {
+                query          => $self->search_phrase,
+                type           => 'phrase_prefix',
+                operator       => 'and',
+                fuzziness      => 0.75,
+                prefix_length  => 1,
+                max_expansions => 25,
+                slop           => 12,
+                analyzer => 'verbatim',
+            },
+        }
+    };
+}
+
 sub _build_query {
     my ($self,) = @_;
 
     my $query = {
-        query => {
-            match => {
-                content => {
-                    query          => $self->search_phrase,
-                    operator       => 'and',
-                    max_expansions => 25,
-                    fuzziness      => 0.75,
-                    prefix_length  => 1,
-                },
-            }
-        },
+        query => $self->match_phrase_prefix_query,
         highlight => {
             tags_schema => 'styled',
             order => 'score',
@@ -311,7 +369,8 @@ sub _build_mappings {
                     "index" => "analyzed",
                     "store" => "yes",
                     "type" => "string",
-                     "term_vector" => "with_positions_offsets",
+                    "term_vector" => "with_positions_offsets",
+                    "analyzer" => "edge_ngram_analyzer",
                 },
                 "mode" => { "type" => "string" },
                 "name" => { "type" => "string" },
@@ -324,8 +383,49 @@ sub _build_mappings {
 sub _build_settings {
     my ($self,) = @_;
     return {
-        number_of_shards => 2,
-        number_of_replicas => 1,
+        index => {
+            number_of_shards => 2,
+            number_of_replicas => 1,
+            analysis => $self->analyzers,
+        },
+    };
+}
+
+sub _build_analyzers {
+    my ($self,) = @_;
+    return {
+        analyzer => {
+            verbatim => {
+                type => 'custom',
+                tokenizer => 'pattern_tokenizer',
+#                filter => [''],
+            },
+            edge_ngram_analyzer => {
+                type => 'custom',
+                tokenizer => 'pattern_tokenizer',
+#                filter => ['edge_ngram_filter'],
+            },
+        },
+        tokenizer => {
+            edge_ngram_tokenizer => {
+                type => 'edge_ngram',
+                min_gram => 1,
+                max_gram => 24,
+            }
+        },
+        tokenizer => {
+            pattern_tokenizer => {
+                type => 'pattern',
+                pattern => '[^\w\.]+',
+            }
+        },
+        filter => {
+            edge_ngram_filter => {
+                type => 'edge_ngram',
+                min_gram => 1,
+                max_gram => 24,
+            }
+        },
     };
 }
 

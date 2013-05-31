@@ -4,7 +4,6 @@ use 5.010;
 package GitSearch;
 use Web::Simple;
 use Git::Search;
-use DDP;
 
 has gs => (
   is => 'lazy',
@@ -16,8 +15,13 @@ has file_root => (
 );
  
 sub dispatch_request {
-  sub (GET + /*) {
+  sub (GET + /favicon.ico) {
+    my ($self, ) = @_;
+    [ 200, [ 'Content-type', 'text/plain' ], [ '' ] ]
+  },
+  sub (GET + /**.*) {
     my ($self, $query) = @_;
+    warn "Query: $query\n";
 
     my $root = $self->file_root;
     $self->gs->search_phrase($query);
@@ -38,9 +42,11 @@ sub add_hit_content {
     my ($self, $hit) = @_;
 
     my $name = $hit->{_source}->{name};
-    my $highlights = $hit->{highlight};
-    my @content = @{$highlights->{content}};
-    my $content = join '<br><hr><br>', @content;
+    my $content = '';
+    if (my $highlights = $hit->{highlight}) {
+        my @content = @{$highlights->{content}};
+        $content = join '<br><hr><br>', @content;
+    }
     my $output .= "<h2><a href='/${name}'>${name}</a></h2>\n";
     $output .= "<pre>${content}</pre>\n";
     return $output;

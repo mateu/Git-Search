@@ -62,7 +62,7 @@ has hits => (
     builder => sub { shift->results->{hits}->{hits} },
     clearer => 1,
 );
-has size          => (is => 'lazy', builder => sub { 25 },);
+has size          => (is => 'lazy', builder => sub { 20 },);
 has search_phrase => (is => 'rw',   builder => sub { $ARGV[0] });
 after search_phrase => sub {
     my $self = shift;
@@ -73,6 +73,8 @@ after search_phrase => sub {
 has mappings => (is => 'lazy');
 has settings => (is => 'lazy');
 has analyzers => (is => 'lazy');
+# Cap file size to one megabyte by default
+has max_file_size => (is => 'lazy', builder => sub { 1_048_576 });
 
 sub _build_file_list {
     my ($self,) = @_;
@@ -94,17 +96,26 @@ sub _build_file_list {
     my @text_files = grep {
         $self->is_text_file($self->work_tree . $_->[$name]) 
     } @files;
+    # Weed out files considered too big
+    @text_files = grep {
+        $self->is_file_small_enough($self->work_tree . $_->[$name]) 
+    } @text_files;
+
 
     return \@text_files;
 }
 
 sub is_text_file {
     my ($self, $file) = @_;
-    my $size = -s $file;
-    my $size_threshold = 100_00;
-    warn "file size: $size for $file\n" if $size > 1_000_000;
-    return if ($size > $size_threshold); 
     -f $file && -T $file;
+}
+
+sub is_file_small_enough {
+    my ($self, $file) = @_;
+    my $size = -s $file;
+    my $is_small_enough = ($size <= $self->max_file_size);
+    warn "file size too big: $size for $file\n" unless $is_small_enough;
+    return $is_small_enough;
 }
 
 sub _build_docs {
@@ -370,7 +381,7 @@ sub _build_mappings {
                     "store" => "yes",
                     "type" => "string",
                     "term_vector" => "with_positions_offsets",
-                    "analyzer" => "edge_ngram_analyzer",
+                    "analyzer" => "verbatim",
                 },
                 "mode" => { "type" => "string" },
                 "name" => { "type" => "string" },
@@ -398,7 +409,7 @@ sub _build_analyzers {
             verbatim => {
                 type => 'custom',
                 tokenizer => 'pattern_tokenizer',
-#                filter => [''],
+                filter => ['lowercase'],
             },
             edge_ngram_analyzer => {
                 type => 'custom',
@@ -416,7 +427,7 @@ sub _build_analyzers {
         tokenizer => {
             pattern_tokenizer => {
                 type => 'pattern',
-                pattern => '[^\w\.]+',
+                pattern => '\s+',
             }
         },
         filter => {

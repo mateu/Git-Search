@@ -247,7 +247,7 @@ sub match_query {
             content => {
                 query          => $self->search_phrase,
                 operator       => 'and',
-                fuzziness      => 0.75,
+                fuzziness      => 0.66,
                 prefix_length  => 1,
                 max_expansions => 25,
                 analyzer => 'verbatim',
@@ -265,7 +265,7 @@ sub match_phrase_query {
                 query          => $self->search_phrase,
                 type           => 'phrase',
                 operator       => 'and',
-                fuzziness      => 0.75,
+                fuzziness      => 0.66,
                 prefix_length  => 1,
                 max_expansions => 25,
                 slop           => 12,
@@ -284,7 +284,7 @@ sub match_phrase_prefix_query {
                 query          => $self->search_phrase,
                 type           => 'phrase_prefix',
                 operator       => 'and',
-                fuzziness      => 0.75,
+                fuzziness      => 0.66,
                 prefix_length  => 1,
                 max_expansions => 25,
                 slop           => 12,
@@ -298,7 +298,8 @@ sub _build_query {
     my ($self,) = @_;
 
     my $query = {
-        query => $self->match_phrase_prefix_query,
+#        query => $self->match_phrase_prefix_query,
+        query => $self->match_query,
         highlight => {
             tags_schema => 'styled',
             order => 'score',
@@ -380,8 +381,9 @@ sub _build_mappings {
                     "index" => "analyzed",
                     "store" => "yes",
                     "type" => "string",
-                    "term_vector" => "with_positions_offsets",
-                    "analyzer" => "verbatim",
+#                    "term_vector" => "with_positions_offsets",
+                    "term_vector" => "with_positions",
+                    "analyzer" => "edge_ngram_analyzer",
                 },
                 "mode" => { "type" => "string" },
                 "name" => { "type" => "string" },
@@ -414,12 +416,12 @@ sub _build_analyzers {
             edge_ngram_analyzer => {
                 type => 'custom',
                 tokenizer => 'pattern_tokenizer',
-#                filter => ['edge_ngram_filter'],
+                filter => ['edge_ngram_filter', 'lowercase'],
             },
         },
         tokenizer => {
             edge_ngram_tokenizer => {
-                type => 'edge_ngram',
+                type => 'edgeNGram',
                 min_gram => 1,
                 max_gram => 24,
             }
@@ -432,9 +434,9 @@ sub _build_analyzers {
         },
         filter => {
             edge_ngram_filter => {
-                type => 'edge_ngram',
+                type => 'edgeNGram',
                 min_gram => 1,
-                max_gram => 24,
+                max_gram => 12,
             }
         },
     };

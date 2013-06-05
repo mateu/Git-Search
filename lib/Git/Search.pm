@@ -298,8 +298,8 @@ sub _build_query {
     my ($self,) = @_;
 
     my $query = {
-#        query => $self->match_phrase_prefix_query,
-        query => $self->match_query,
+        query => $self->match_phrase_prefix_query,
+#        query => $self->match_query,
         highlight => {
             tags_schema => 'styled',
             order => 'score',
@@ -369,8 +369,11 @@ sub check_response {
 sub _build_mappings {
     my ($self,) = @_;
 
+    my $config = $self->config;
+    my $type = $config->{type};
+
     return {
-        "git" => {
+        $type => {
             "_source" => { "compress" => 1 },
             "numeric_detection" => 1,
             "dynamic" => "strict",
@@ -381,8 +384,7 @@ sub _build_mappings {
                     "index" => "analyzed",
                     "store" => "yes",
                     "type" => "string",
-#                    "term_vector" => "with_positions_offsets",
-                    "term_vector" => "with_positions",
+                    "term_vector" => "with_positions_offsets",
                     "analyzer" => "edge_ngram_analyzer",
                 },
                 "mode" => { "type" => "string" },

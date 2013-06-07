@@ -63,6 +63,8 @@ has hits => (
     clearer => 1,
 );
 has size          => (is => 'lazy', builder => sub { 20 },);
+has fuzziness     => (is => 'lazy', builder => sub { 0.66 },);
+has operator      => (is => 'lazy', builder => sub { 'and' },);
 has search_phrase => (is => 'rw',   builder => sub { $ARGV[0] });
 after search_phrase => sub {
     my $self = shift;
@@ -196,7 +198,7 @@ sub delete_index {
 
     # If we already have an index we'll need to delete it so we don't
     # have redundant records with this bulk load.
-    # TODO: Use file name is unique id for the docs on insertion
+    # TODO: Use file name as unique id for the docs on insertion
     if ($status_response[2] eq 'OK') {
         warn "Have an index already, going to delete it\n";
         my @delete_response = $self->furl->delete($self->index_url);
@@ -246,10 +248,8 @@ sub match_query {
         match => {
             content => {
                 query          => $self->search_phrase,
-                operator       => 'and',
-                fuzziness      => 0.66,
-                prefix_length  => 1,
-                max_expansions => 25,
+                operator       => $self->operator,
+                fuzziness      => $self->fuzziness,
                 analyzer => 'verbatim',
             },
         }
@@ -264,10 +264,8 @@ sub match_phrase_query {
             content => {
                 query          => $self->search_phrase,
                 type           => 'phrase',
-                operator       => 'and',
-                fuzziness      => 0.66,
-                prefix_length  => 1,
-                max_expansions => 25,
+                operator       => $self->operator,
+                fuzziness      => $self->fuzziness,
                 slop           => 12,
                 analyzer => 'verbatim',
             },
@@ -283,8 +281,8 @@ sub match_phrase_prefix_query {
             content => {
                 query          => $self->search_phrase,
                 type           => 'phrase_prefix',
-                operator       => 'and',
-                fuzziness      => 0.66,
+                operator       => $self->operator,
+                fuzziness      => $self->fuzziness,
                 prefix_length  => 1,
                 max_expansions => 25,
                 slop           => 12,

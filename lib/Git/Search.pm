@@ -12,6 +12,7 @@ use Data::Dumper;
 
 our $VERSION = 0.01;
 
+has debug => ( is => 'lazy', builder => sub { $ENV{GIT_SEARCH_DEBUG} }, );
 has config => (
     is      => 'lazy',
     builder => sub { Git::Search::Config->new->config },
@@ -20,6 +21,7 @@ has work_tree => (
     is      => 'lazy',
     builder => sub { shift->config->{work_tree} },
 );
+has sub_dirs => ( is => 'lazy', builder => sub { shift->config->{sub_dirs} }, );
 has index_url => (
     is      => 'lazy',
     builder => sub { 
@@ -62,10 +64,15 @@ has hits => (
     builder => sub { shift->results->{hits}->{hits} },
     clearer => 1,
 );
-has size          => (is => 'lazy', builder => sub { 20 },);
-has fuzziness     => (is => 'lazy', builder => sub { 0.66 },);
+has size          => (is => 'lazy', builder => sub { 10 },);
+has fuzziness     => (is => 'lazy', builder => sub { shift->config->{fuzziness} },);
+has max_gram      => (is => 'lazy', builder => sub { 12 },);
 has operator      => (is => 'lazy', builder => sub { 'and' },);
-has search_phrase => (is => 'rw',   builder => sub { $ARGV[0] });
+has search_phrase => (is => 'rw',   builder => sub { $ARGV[0] }, );
+has search_type   => (is => 'ro',   builder => sub { 'match_phrase_prefix_query' }, );
+has _all_enabled  => (is => 'ro',   builder => sub { 'true' }, );
+has _source_enabled => (is => 'ro',   builder => sub { 'true' }, );
+
 after search_phrase => sub {
     my $self = shift;
     $self->clear_query;
@@ -90,7 +97,7 @@ sub _build_file_list {
 
     # Possibly use a set of sub-directories
     my $name     = 3;
-    my @sub_dirs = @{ $self->config->{sub_dirs} };
+    my @sub_dirs = @{ $self->sub_dirs };
     @sub_dirs = map { '^' . $_ } @sub_dirs;
     my $sub_dirs = join '|', @sub_dirs;
     @files = grep { $_->[$name] =~ m!($sub_dirs)! } @files;
@@ -116,7 +123,9 @@ sub is_file_small_enough {
     my ($self, $file) = @_;
     my $size = -s $file;
     my $is_small_enough = ($size <= $self->max_file_size);
-    warn "file size too big: $size for $file\n" unless $is_small_enough;
+    if ($self->debug) {
+        warn "file size too big: $size for $file\n" unless $is_small_enough
+    }
     return $is_small_enough;
 }
 
@@ -153,7 +162,7 @@ sub insert_docs {
 
     # Insert (and index) the docs
     foreach my $doc (@{ $self->docs }) {
-        if ($ENV{GIT_SEARCH_DEBUG}) { warn "creating doc: ", $doc->{name}, "\n"; }
+        if ($self->debug) { warn "creating doc: ", $doc->{name}, "\n"; }
         if (my $success = $self->create_doc($doc)) {
             $docs_inserted_count++;
         }
@@ -193,14 +202,14 @@ sub delete_index {
 
     # Check if index exists
     my $index_status_url = $self->index_url . '_status';
-    warn "Getting $index_status_url\n";
+    warn "Getting $index_status_url\n" if $self->debug;
     my @status_response = $self->furl->get($index_status_url);
 
     # If we already have an index we'll need to delete it so we don't
     # have redundant records with this bulk load.
     # TODO: Use file name as unique id for the docs on insertion
     if ($status_response[2] eq 'OK') {
-        warn "Have an index already, going to delete it\n";
+        warn "Have an index already, going to delete it\n" if $self->debug;
         my @delete_response = $self->furl->delete($self->index_url);
 
         # Remove existing data?
@@ -211,7 +220,7 @@ sub delete_index {
             return;
         }
         else {
-            warn "DELETE went $delete_response[2]\n";
+            warn "DELETE went $delete_response[2]\n" if $self->debug;
             return 1;
         }
     }
@@ -295,9 +304,9 @@ sub match_phrase_prefix_query {
 sub _build_query {
     my ($self,) = @_;
 
+    my $search_type = $self->search_type;
     my $query = {
-        query => $self->match_phrase_prefix_query,
-#        query => $self->match_query,
+        query => $self->$search_type,
         highlight => {
             tags_schema => 'styled',
             order => 'score',
@@ -310,7 +319,6 @@ sub _build_query {
         },
         size => $self->size,
     };
-
     return $query;
 }
 
@@ -369,10 +377,13 @@ sub _build_mappings {
 
     my $config = $self->config;
     my $type = $config->{type};
+    my $all_enabled = $self->_all_enabled;
+    my $source_enabled = $self->_source_enabled;
 
     return {
         $type => {
-            "_source" => { "compress" => 1 },
+            "_source" => {"enabled" => $source_enabled, "compress" => 1},
+            "_all" => {"enabled" => $all_enabled},
             "numeric_detection" => 1,
             "dynamic" => "strict",
             "type" => "object",
@@ -380,7 +391,7 @@ sub _build_mappings {
                 "commit_id" => { "type" => "string" },
                 "content"   => {
                     "index" => "analyzed",
-                    "store" => "yes",
+                    "store" => "no",
                     "type" => "string",
                     "term_vector" => "with_positions_offsets",
                     "analyzer" => "edge_ngram_analyzer",
@@ -420,13 +431,6 @@ sub _build_analyzers {
             },
         },
         tokenizer => {
-            edge_ngram_tokenizer => {
-                type => 'edgeNGram',
-                min_gram => 1,
-                max_gram => 24,
-            }
-        },
-        tokenizer => {
             pattern_tokenizer => {
                 type => 'pattern',
                 pattern => '\s+',
@@ -436,7 +440,7 @@ sub _build_analyzers {
             edge_ngram_filter => {
                 type => 'edgeNGram',
                 min_gram => 1,
-                max_gram => 12,
+                max_gram => $self->max_gram,
             }
         },
     };

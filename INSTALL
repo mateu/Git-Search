@@ -1,3 +1,11 @@
-See SYNOPSIS in Git::Search
+1) Copy git-search.conf to git-search-local.conf and edit it to your needs.
+   This means adapting the configuration to point to your elasticsearch
+   service and the git repo you want to search.
 
-  perldoc lib/Git/Search.pm
+2) Create index (with debug on to see the files used), execute:
+     GIT_SEARCH_DEBUG=1 perl -Ilib bin/insert_docs.pl  
+
+3) Start app, execute:
+     plackup -Ilib 
+
+4) Do a search by requesting:  http://localhost:5000/search phrase

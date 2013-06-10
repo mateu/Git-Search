@@ -454,8 +454,10 @@ Git::Search - search a git repo with elasticsearch
 =head1 SYNOPSIS
 
     # Copy git-search.conf to git-search-local.conf and edit it to your needs
-    perl -Ilib bin/insert_docs.pl  # create index
-    plackup -Ilib web.psgi # start app
+    # Create index (with debug on to see the files affected)
+      GIT_SEARCH_DEBUG=1 perl -Ilib bin/insert_docs.pl  
+    # Start app
+      plackup -Ilib 
     # Do a search by requesting:  http://localhost:5000/search phrase
     
 =cut

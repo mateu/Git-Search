@@ -1,8 +1,7 @@
-use strictures 1;
+use strict;
+use warnings FATAL => 'all';
 package Git::Search::Config;
 use Moo;
-use Dir::Self;
-use Path::Class qw(file);
 
 has 'config' => (
     is  => 'rw',
@@ -31,14 +30,8 @@ sub _build_config {
     my ($self) = @_;
 
     warn "BUILD CONFIG" if $ENV{GIT_SEARCH_DEBUG};
-    my $conf_file       = file(__DIR__ . '/../../../git-search.conf');
-    $conf_file->cleanup;
-    $conf_file->resolve if (-e $conf_file);
-
-    my $local_conf_file = file(__DIR__ . '/../../../git-search-local.conf');
-    $local_conf_file->cleanup;
-    $local_conf_file->resolve if (-e $local_conf_file);
-
+    my $conf_file       =  'git-search.conf';
+    my $local_conf_file = 'git-search-local.conf';
     my $env_conf_file   = $ENV{GIT_SEARCH_CONFIG};
     warn "ENV CONFIG: $ENV{GIT_SEARCH_CONFIG}" if ($ENV{GIT_SEARCH_DEBUG} and $ENV{GIT_SEARCH_CONFIG});
 
@@ -49,6 +42,7 @@ sub _build_config {
     # The merge happens in pairs
     my $merged_conf = $self->merge_hash($local_conf, $conf);
        $merged_conf = $self->merge_hash($env_conf, $merged_conf);
+
     return $merged_conf;
 }
 

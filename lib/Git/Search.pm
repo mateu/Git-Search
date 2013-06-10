@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use 5.010;
 
 package Git::Search;
 use Git::Search::Config;
@@ -62,8 +63,8 @@ has hits => (
     clearer => 1,
 );
 has size          => (is => 'lazy', builder => sub { 10 },);
-has fuzziness     => (is => 'lazy', builder => sub { shift->config->{fuzziness} },);
-has max_gram      => (is => 'lazy', builder => sub { 12 },);
+has fuzziness     => (is => 'lazy', builder => sub { shift->config->{fuzziness}//0.66 },);
+has max_gram      => (is => 'lazy', builder => sub { shift->config->{max_gram}||15 },);
 has operator      => (is => 'lazy', builder => sub { 'and' },);
 has search_phrase => (is => 'rw',   builder => sub { $ARGV[0] }, );
 has search_type   => (is => 'ro',   builder => sub { 'match_phrase_prefix_query' }, );

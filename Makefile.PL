@@ -6,11 +6,7 @@ use ExtUtils::MakeMaker;
 
 my %RUN_DEPS = (
   'Moo' => 1.002000,
-  'Dir::Self' => 0.10,
-  'Path::Class' => 0.32,
-  'IO::All' => 0.46,
   'JSON' => 2.57,
-  'IPC::System::Simple' => 1.21,
   'Web::Simple' => 0.020,
   'Furl' => 2.16,
 );

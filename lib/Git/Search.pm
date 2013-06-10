@@ -4,11 +4,8 @@ use warnings;
 package Git::Search;
 use Git::Search::Config;
 use Moo;
-use IO::All;
 use JSON;
-use IPC::System::Simple qw/ capture /;
 use Furl;
-use Data::Dumper;
 
 our $VERSION = 0.01;
 
@@ -90,9 +87,9 @@ sub _build_file_list {
 
     my $work_tree = $self->work_tree;
     my $git_dir   = $work_tree . '.git';
-    my @files =
-      capture('git', "--git-dir=${git_dir}", "--work-tree=${work_tree}",
-        'ls-tree', '--full-tree', '-r', 'HEAD');
+    my $command_line = "git --git-dir=${git_dir} --work-tree=${work_tree} ls-tree --full-tree -r HEAD";
+    my @files = `$command_line`;
+
     @files = map { [ split /\s+/, $_ ] } @files;
 
     # Possibly use a set of sub-directories
@@ -139,8 +136,8 @@ sub _build_docs {
     my $name = 3;
     foreach my $file (@{ $self->file_list }) {
         my $filename = $self->work_tree . $file->[$name];
-        my $io       = io $filename;
-        my $content  = $io->slurp;
+        open my $fh, '<', $filename;
+        my $content = do { local $/; <$fh> };
         push @docs,
           {
             content   => $content,
@@ -243,7 +240,6 @@ sub create_doc {
 
     if ($response->{msg} ne 'Created') {
         warn "Request failed with message: ", $response->{msg};
-        warn Dumper $response;
         return;
     }
 

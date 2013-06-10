@@ -3,14 +3,20 @@ Prereqs: elasticsearch, git
 0) Get the code:
      git clone git://github.com/mateu/Git-Search.git
 
-1) Copy git-search.conf to git-search-local.conf and edit it to your needs.
+1) Install dependencies:
+     cd Git-Search
+     sudo cpanm --installdeps .
+
+2) Copy git-search.conf to git-search-local.conf and edit it to your needs.
    This means adapting the configuration to point to your elasticsearch
    service and the git repo you want to search.
+     cp git-search.conf git-search-local.conf
+     vi git-search-local.conf
 
-2) Create index (with debug on to see the files used), execute:
+3) Create index (with debug on to see the files used), execute:
      GIT_SEARCH_DEBUG=1 perl -Ilib bin/insert_docs.pl  
 
-3) Start app, execute:
+4) Start app, execute:
      plackup -Ilib 
 
-4) Do a search by requesting:  http://localhost:5000/search phrase
+5) Do a search by requesting:  http://localhost:5000/search phrase

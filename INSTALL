@@ -1,3 +1,8 @@
+Prereqs: elasticsearch, git
+
+0) Get the code:
+     git clone git://github.com/mateu/Git-Search.git
+
 1) Copy git-search.conf to git-search-local.conf and edit it to your needs.
    This means adapting the configuration to point to your elasticsearch
    service and the git repo you want to search.

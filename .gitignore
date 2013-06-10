@@ -17,3 +17,8 @@ Distar/
 
 # yes that's right, distar makes it for us
 MANIFEST.SKIP
+
+nytprof.out
+nytprof/
+sizeme.db
+

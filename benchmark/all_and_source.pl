@@ -8,7 +8,7 @@ my $sub_dirs = ['doc/howto'];
 my $gs_true  = Git::Search->new(
    _all_enabled => 'true', 
     sub_dirs => $sub_dirs,
-   _source => 'true',
+   _source_enabled => 'true',
 );
 my $gs_false = Git::Search->new(
    _all_enabled => 'false', 

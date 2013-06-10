@@ -1,15 +1,14 @@
 use strict;
 use warnings;
 use Git::Search;
-use DDP;
-use Data::Dumper::Concise;
+use 5.010;
 
 my $gs = Git::Search->new;
 my $hits = $gs->hits;
-#p($hits);
+say "\nFound ", $gs->search_phrase, " in files: \n";
 foreach my $hit (@{$gs->hits}) {
-    warn "name: ", $hit->{_source}->{name};
+    say "  ", $hit->{_source}->{name};
     my $highlights = $hit->{highlight};
     my @content = @{$highlights->{content}};
-    warn Dumper(@content);
 }
+print "\n";

@@ -136,9 +136,7 @@ sub _build_docs {
     my $id   = 2;
     my $name = 3;
     foreach my $file (@{ $self->file_list }) {
-        my $filename = $self->work_tree . $file->[$name];
-        open my $fh, '<', $filename;
-        my $content = do { local $/; <$fh> };
+        my $content = $self->get_content_for($file->[$name]);
         push @docs,
           {
             content   => $content,
@@ -150,6 +148,16 @@ sub _build_docs {
     }
 
     return \@docs;
+}
+
+sub get_content_for {
+    my ($self, $name) = @_;
+
+    my $filename = $self->work_tree . $name;
+    open my $fh, '<', $filename;
+    my $content = do { local $/; <$fh> };
+
+    return $content;
 }
 
 sub insert_docs {
@@ -167,6 +175,27 @@ sub insert_docs {
     }
 
     return $docs_inserted_count;
+}
+
+sub get_doc {
+    my ($self, $name) = @_;
+
+    my $get_doc_query = { query => {term => {name => $name} } };
+    my %args = (
+        request_method => 'POST',
+        content_type   => 'application/json',
+        content        => encode_json($get_doc_query),
+        path_query     => $self->path_query_base . '_search',
+    );
+    my $response = $self->crud(%args);
+
+    return decode_json($response->{body});
+}
+
+sub update_doc {
+    my ($self, $name) = @_;
+
+    my $content = $self->get_content_for($name);
 }
 
 sub recreate_index {

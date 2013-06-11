@@ -394,7 +394,7 @@ sub _build_mappings {
                     "analyzer" => "edge_ngram_analyzer",
                 },
                 "mode" => { "type" => "string" },
-                "name" => { "type" => "string" },
+                "name" => { "type" => "string", "analyzer" => "whitespace" },
                 "type" => { "type" => "string" }
             }
         }

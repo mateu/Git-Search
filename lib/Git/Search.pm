@@ -154,7 +154,7 @@ sub get_content_for {
     my ($self, $name) = @_;
 
     my $filename = $self->work_tree . $name;
-    open my $fh, '<', $filename;
+    open my $fh, '<', $filename or die "Can't open $filename Reason: $!";
     my $content = do { local $/; <$fh> };
 
     return $content;
@@ -176,15 +176,19 @@ sub insert_docs {
 
     return $docs_inserted_count;
 }
+sub query_doc {
+    my ($self, $name) = @_;
+    return { query => {term => {_id => $name} } };
+}
 
 sub get_doc {
     my ($self, $name) = @_;
 
-    my $get_doc_query = { query => {term => {name => $name} } };
+    my $query_doc = $self->query_doc($name);
     my %args = (
         request_method => 'POST',
         content_type   => 'application/json',
-        content        => encode_json($get_doc_query),
+        content        => encode_json($query_doc),
         path_query     => $self->path_query_base . '_search',
     );
     my $response = $self->crud(%args);
@@ -195,7 +199,24 @@ sub get_doc {
 sub update_doc {
     my ($self, $name) = @_;
 
-    my $content = $self->get_content_for($name);
+    my $encoded_name = $name;
+    # Enocde slash to keep ES happy with id
+    $encoded_name =~ s|/|%2F|g;
+    my $path_query = $self->path_query_base . $encoded_name . '/_update';
+    # TODO: Update all document attributes including commit_id
+    my $doc = { 
+        doc => {
+            content => $self->get_content_for($name),
+        }
+    };
+    my %args = (
+        request_method => 'POST',
+        content_type   => 'application/json',
+        content        => encode_json($doc),
+        path_query     => $path_query,
+    );
+
+    return $self->crud(%args);
 }
 
 sub recreate_index {
@@ -425,7 +446,8 @@ sub _build_mappings {
                 "mode" => { "type" => "string" },
                 "name" => { "type" => "string", "analyzer" => "whitespace" },
                 "type" => { "type" => "string" }
-            }
+            },
+            "_id" => { "path" => "name" },
         }
     };
 }

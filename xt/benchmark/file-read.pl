@@ -18,6 +18,7 @@ cmpthese(
             open my $fh, '<', $file;
             my $content = do { local $/; <$fh> };
         },
+        'cat' => sub { my $content = `cat $file` },
     }
 );
 

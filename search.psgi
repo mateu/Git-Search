@@ -13,6 +13,17 @@ has file_root => (
   is => 'lazy',
   builder => sub { shift->gs->work_tree },
 );
+has git_branch => (
+  is => 'lazy',
+  builder => sub {
+    my $self = shift;
+    my $work_tree = $self->gs->work_tree;
+    my $git_dir   = $work_tree . '.git';
+    my $get_branch_command = "git --git-dir=${git_dir} --work-tree=${work_tree} rev-parse --abbrev-ref HEAD";
+    my ($branch) = `$get_branch_command`;
+    return $branch
+  },
+);
  
 sub dispatch_request {
   sub (GET + /favicon.ico) {
@@ -21,7 +32,6 @@ sub dispatch_request {
   },
   sub (GET + /**.*) {
     my ($self, $query) = @_;
-    warn "Query: $query\n";
 
     my $root = $self->file_root;
     $self->gs->search_phrase($query);
@@ -41,13 +51,18 @@ sub dispatch_request {
 sub add_hit_content {
     my ($self, $hit) = @_;
 
+    my $git_branch = $self->git_branch;
     my $name = $hit->{_source}->{name};
     my $content = '';
     if (my $highlights = $hit->{highlight}) {
         my @content = @{$highlights->{content}};
-        $content = join '<br><hr><br>', @content;
+        $content = join '<br><hr style="border-color: #fff; "><br>', @content;
     }
-    my $output .= "<h2><a href='/${name}'>${name}</a></h2>\n";
+    my $output = "<div><span style='font-weight:bold; font-size: 1.08em;'>${name}</span><br><a href='${name}'>local</a>";
+    if (my $remote_tree = $self->gs->remote_work_tree) {
+        $output .= " or <a href='${remote_tree}${git_branch}/${name}'>remote</a>";
+    }
+    $output .= "</div>\n";
     $output .= "<pre>${content}</pre>\n";
     return $output;
 }

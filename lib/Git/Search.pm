@@ -19,6 +19,10 @@ has work_tree => (
     is      => 'lazy',
     builder => sub { shift->config->{work_tree} },
 );
+has remote_work_tree => (
+    is      => 'lazy',
+    builder => sub { shift->config->{remote_work_tree} },
+);
 has sub_dirs => ( is => 'lazy', builder => sub { shift->config->{sub_dirs} }, );
 has index_url => (
     is      => 'lazy',
@@ -433,7 +437,6 @@ sub _build_mappings {
             "_all" => {"enabled" => $all_enabled},
             "numeric_detection" => 1,
             "dynamic" => "strict",
-            "type" => "object",
             "properties" => {
                 "commit_id" => { "type" => "string" },
                 "content"   => {

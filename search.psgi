@@ -35,12 +35,24 @@ sub dispatch_request {
 
     my $root = $self->file_root;
     $self->gs->search_phrase($query);
-    my $output;
+    my $title = "<div style='font-size: 1.2em;'>Search phrase: <i>${query}</i> ";
+    my $toc = "<div><ul>\n";
+    my $body = '';
     my $hits = $self->gs->hits;
-    foreach my $hit (@{$hits}) {
-        $output .= $self->add_hit_content($hit);
+    if (not scalar @{$hits}) {
+        $title .= "<strong>not found</strong></div>\n";
     }
-    my $page = $self->html_wrapper($output);
+    else {
+        $title .= "found in:</div>\n";
+    }
+    foreach my $hit (@{$hits}) {
+        my $name = $hit->{_source}->{name};
+        $toc .= "<li><a href='#${name}'>${name}</a>\n";
+        $body .= $self->add_hit_content($hit);
+    }
+    $toc .= "<\ul></div>\n";
+    my $inner_page = $title . $toc . $body;
+    my $page = $self->html_wrapper($inner_page);
     [ 200, [ 'Content-type', 'text/html' ], [ $page ] ]
   },
   sub () {
@@ -58,7 +70,7 @@ sub add_hit_content {
         my @content = @{$highlights->{content}};
         $content = join '<br><hr style="border-color: #fff; "><br>', @content;
     }
-    my $output = "<div><span style='font-weight:bold; font-size: 1.08em;'>${name}</span><br><a href='${name}'>local</a>";
+    my $output = "<div><a name='${name}'></a><span style='font-weight:bold; font-size: 1.08em;'>${name}</span><br><a href='${name}'>local</a>";
     if (my $remote_tree = $self->gs->remote_work_tree) {
         $output .= " or <a href='${remote_tree}${git_branch}/${name}'>remote</a>";
     }
